@@ -17,6 +17,10 @@ cargo build --locked --release -p comicgpu-desktop -p comicgpu-server
 
 De workflow levert uitvoerbare bestanden. Ze zijn niet digitaal ondertekend en er is nog geen installer gepubliceerd.
 
+### Eén portable exe
+
+De GNU-build kan worden verpakt met `bash tools/build-portable.sh` (Rust en MinGW vereist op de buildmachine). Dit maakt `dist/ComicGPU-Windows-0.2.0-x64.exe` met de applicatie en WebView2Loader.dll ingebed. Dubbelklik op dit bestand. De inhoud wordt in een unieke tijdelijke map uitgepakt, de app wordt gestart en na afsluiten wordt de tijdelijke map opgeruimd. Microsoft Edge WebView2 Runtime blijft vereist. De portable exe is niet digitaal ondertekend.
+
 ## Docker / Proxmox
 
 Vanuit een checkout van deze repository in je Docker-VM:
