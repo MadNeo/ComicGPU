@@ -16,3 +16,5 @@ tempfile = "3"
 wgpu = "0.19"
 pollster = "0.3"
 bytemuck = "1"
+
+unrar = "0.5"

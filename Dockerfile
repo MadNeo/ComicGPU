@@ -6,7 +6,7 @@ COPY ui ./ui
 RUN cargo build --locked --release -p comicgpu-server
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends libarchive-tools libvulkan1 mesa-vulkan-drivers ca-certificates && rm -rf /var/lib/apt/lists/* && useradd -m comic
+RUN apt-get update && apt-get install -y --no-install-recommends libvulkan1 mesa-vulkan-drivers ca-certificates && rm -rf /var/lib/apt/lists/* && useradd -m comic
 COPY --from=builder /src/target/release/comicgpu-server /usr/local/bin/comicgpu-server
 USER comic
 ENV COMICGPU_BIND=0.0.0.0:8501

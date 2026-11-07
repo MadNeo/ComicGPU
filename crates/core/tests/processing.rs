@@ -159,3 +159,47 @@ fn gpu_shader_executes_when_adapter_available() {
         .zip([90_u8, 120, 200])
         .all(|(a, b)| a.abs_diff(b) <= 1)));
 }
+
+#[test]
+fn cbr_reads_embedded_rar_without_external_programs() {
+    fn crc(bytes: &[u8]) -> u32 {
+        let mut value = !0_u32;
+        for byte in bytes {
+            value ^= u32::from(*byte);
+            for _ in 0..8 {
+                value = (value >> 1) ^ (0xedb88320_u32 & 0_u32.wrapping_sub(value & 1));
+            }
+        }
+        !value
+    }
+    fn header(kind: u8, flags: u16, body: &[u8]) -> Vec<u8> {
+        let mut bytes = vec![kind];
+        bytes.extend(flags.to_le_bytes());
+        bytes.extend(((body.len() + 7) as u16).to_le_bytes());
+        bytes.extend(body);
+        let mut result = (crc(&bytes) as u16).to_le_bytes().to_vec();
+        result.extend(bytes);
+        result
+    }
+    let image = png(fixture()).unwrap();
+    let mut data = b"Rar!\x1a\x07\x00".to_vec();
+    data.extend(header(0x73, 0, &[0; 6]));
+    let mut body = Vec::new();
+    body.extend((image.len() as u32).to_le_bytes());
+    body.extend((image.len() as u32).to_le_bytes());
+    body.push(3);
+    body.extend(crc(&image).to_le_bytes());
+    body.extend(0_u32.to_le_bytes());
+    body.extend([20, 0x30]);
+    body.extend(5_u16.to_le_bytes());
+    body.extend(0o100644_u32.to_le_bytes());
+    body.extend(b"1.png");
+    data.extend(header(0x74, 0x8000, &body));
+    data.extend(image);
+    data.extend(header(0x7b, 0, &[]));
+    let book = read_book(&data, "test.cbr").unwrap();
+    assert_eq!(book.pages.len(), 1);
+    assert_eq!(book.pages[0].info.name, "1.png");
+    let zip = archive(vec![("1.png", png(fixture()).unwrap())]);
+    assert_eq!(read_book(&zip, "misnamed.cbr").unwrap().pages.len(), 1);
+}

@@ -1,3 +1,4 @@
+mod settings;
 use axum::{
     body::Bytes,
     extract::{DefaultBodyLimit, Multipart, Path, Query, State},
@@ -63,7 +64,7 @@ async fn authenticate(
 }
 type ApiResult<T> = Result<T, (StatusCode, String)>;
 fn error(error: impl std::fmt::Display) -> (StatusCode, String) {
-    (StatusCode::BAD_REQUEST, error.to_string())
+    (StatusCode::BAD_REQUEST, format!("{error:#}"))
 }
 fn book(state: &AppState, id: &str) -> ApiResult<Arc<Book>> {
     state.books.lock().map_err(error)?.get(id).cloned().ok_or((
@@ -159,6 +160,8 @@ async fn preview(
 }
 #[derive(Deserialize)]
 struct Export {
+    #[serde(default)]
+    filename: String,
     options: Vec<Options>,
     workers: usize,
     allow_unreviewed: bool,
@@ -170,6 +173,7 @@ async fn export(
 ) -> ApiResult<Response> {
     let book = book(&state, &id)?;
     let permit = state.gate.clone().acquire_owned().await.map_err(error)?;
+    let filename = request.filename.clone();
     let bytes = tokio::task::spawn_blocking(move || {
         let _permit = permit;
         comicgpu_core::export_book(
@@ -182,6 +186,9 @@ async fn export(
     .await
     .map_err(error)?
     .map_err(error)?;
+    if let Some(path) = settings::save_output(&bytes, &filename).map_err(error)? {
+        return Ok(Json(serde_json::json!({"saved":path})).into_response());
+    }
     Ok((
         [
             (header::CONTENT_TYPE, "application/vnd.comicbook+zip"),
@@ -211,6 +218,10 @@ pub async fn serve(listener: TcpListener, token: String) -> anyhow::Result<()> {
     };
     let app = Router::new()
         .route(
+            "/license.txt",
+            get(|| async { include_str!("../../../licenses/UnRAR.txt") }),
+        )
+        .route(
             "/",
             get(|| async { Html(include_str!("../../../ui/index.html")) }),
         )
@@ -232,6 +243,11 @@ pub async fn serve(listener: TcpListener, token: String) -> anyhow::Result<()> {
                 )
             }),
         )
+        .route(
+            "/api/settings",
+            get(settings::get_settings).post(settings::save_settings),
+        )
+        .route("/api/settings/folder", post(settings::choose_folder))
         .route("/api/capabilities", get(capabilities))
         .route("/api/books", post(upload))
         .route("/api/books/{id}", delete(remove))

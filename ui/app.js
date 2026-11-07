@@ -4,6 +4,7 @@ const token = new URLSearchParams(location.search).get('token') || sessionStorag
 sessionStorage.setItem('comicgpu-token', token);
 history.replaceState(null, '', location.pathname);
 const books = [];
+let defaults = {workers:1,profile:"digital",gpu:false,output_directory:""};
 let currentBook = 0;
 let currentPage = 0;
 let previewUrl;
@@ -122,7 +123,7 @@ function addFiles(input) { return run(async () => {
     try {
       const book = await (await api('books', { method: 'POST', body: form })).json();
       book.name = file.name;
-      book.options = book.pages.map(emptyOptions);
+      book.options = book.pages.map(() => ({...emptyOptions(),gpu:defaults.gpu,deskew:defaults.profile!=="digital",crop:defaults.profile!=="digital",paper:defaults.profile==="scan"?.35:defaults.profile==="manga"?.25:0,grayscale:defaults.profile==="manga"}));
       books.push(book);
     } catch (error) { failures.push(`${file.name}: ${error.message}`); }
   }
@@ -144,7 +145,7 @@ $('remove').onclick = () => run(async () => {
 $('apply').onclick = () => {
   if (!selected()) return;
   const profile = $('profile').value;
-  selected().options = selected().pages.map(() => ({ ...emptyOptions(), deskew: profile !== 'digital', crop: profile !== 'digital', paper: profile === 'scan' ? .35 : profile === 'manga' ? .25 : 0, grayscale: profile === 'manga' }));
+  selected().options = selected().pages.map(() => ({ ...emptyOptions(), gpu: defaults.gpu, deskew: profile !== 'digital', crop: profile !== 'digital', paper: profile === 'scan' ? .35 : profile === 'manga' ? .25 : 0, grayscale: profile === 'manga' }));
   clearDownloads(); showPage();
 };
 $('excluded').onchange = () => { selected().options[currentPage].excluded = $('excluded').checked; changed(); };
@@ -181,7 +182,12 @@ $('export').onclick = () => run(async () => {
   if (!books.length) return;
   for (const [index, book] of books.entries()) {
     status(`Verwerken ${index + 1}/${books.length} · ${book.name}`);
-    const response = await api(`books/${book.id}/export`, json({ options: book.options, workers: Number($('workers').value), allow_unreviewed: $('allow').checked }));
+    const response = await api(`books/${book.id}/export`, json({ filename: book.name, options: book.options, workers: Number($('workers').value), allow_unreviewed: $('allow').checked }));
+    if ((response.headers.get('content-type') || '').includes('application/json')) {
+      const saved = await response.json();
+      const label = document.createElement('p'); label.textContent = 'Opgeslagen: ' + saved.saved;
+      $('downloads').append(label); continue;
+    }
     const url = URL.createObjectURL(await response.blob());
     downloads.push(url);
     const link = document.createElement('a');
@@ -189,7 +195,7 @@ $('export').onclick = () => run(async () => {
     link.textContent = 'Download ' + link.download;
     $('downloads').append(link);
   }
-  status('Batch voltooid. Download je verbeterde comics links.');
+  status('Batch voltooid. De uitvoer staat links vermeld.');
 });
 $('theme').onclick = () => {
   document.body.classList.toggle('light');
@@ -201,3 +207,20 @@ api('capabilities').then(response => response.json()).then(hardware => {
   $('hardware').textContent = `${hardware.cpus} CPU-threads · ${hardware.gpu || 'CPU-verwerking beschikbaar'}`;
   const input = $('option-gpu'); if (input) input.disabled = !gpuAvailable;
 }).catch(error => status(error.message));
+
+function fillSettings() {
+  $('output-directory').value=defaults.output_directory;
+  $('settings-workers').value=defaults.workers;
+  $('settings-profile').value=defaults.profile;
+  $('settings-gpu').checked=defaults.gpu;
+  $('workers').value=defaults.workers;
+  $('profile').value=defaults.profile;
+}
+$('settings-open').onclick=()=>{fillSettings();$('settings-dialog').hidden=false;document.querySelector('main').hidden=true;};
+$('settings-close').onclick=()=>{$('settings-dialog').hidden=true;document.querySelector('main').hidden=false;};
+$('choose-output').onclick=async()=>{try{const data=await(await api('settings/folder',{method:'POST'})).json();if(data.path)$('output-directory').value=data.path;}catch(e){$('settings-message').textContent=e.message;}};
+$('settings-save').onclick=async()=>{try{
+ defaults=await(await api('settings',json({output_directory:$('output-directory').value,workers:Number($('settings-workers').value),profile:$('settings-profile').value,gpu:$('settings-gpu').checked}))).json();
+ fillSettings();$('settings-message').textContent='Instellingen opgeslagen. Het profiel geldt voor nieuwe uploads.';
+}catch(e){$('settings-message').textContent=e.message;}};
+api('settings').then(r=>r.json()).then(s=>{defaults=s;fillSettings();}).catch(e=>status(e.message));

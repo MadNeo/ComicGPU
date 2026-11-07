@@ -1,25 +1,16 @@
-# ComicGPU 0.2 — Rust
+# ComicGPU 0.2.1
 
-Comicrestauratie met één Rust-kern, een Windows-app (Tauri) en een webserver (Axum). De bediening is gedeeld. Python is niet nodig voor de Rust-versie.
+## Wijzigingen
 
-## Windows gebruiken
+CBR wordt nu met ingebouwde UnRAR uitgepakt, inclusief RAR5-ondersteuning. Windows tar.exe is hiervoor niet meer nodig. Versleutelde of onvolledige archieven melden een fout.
 
-Open de [GitHub Actions-builds](https://github.com/MadNeo/ComicGPU/actions), kies een geslaagde **Rust checks and builds**-run en download **ComicGPU-Windows**. Pak de ZIP uit en start `comicgpu-desktop.exe`. De app opent een eigen venster en kiest zelf een vrije lokale poort. Microsoft Edge WebView2 Runtime moet aanwezig zijn. `comicgpu-server.exe` kan desgewenst los worden gestart en toont de browser-URL in de console.
+Open **Instellingen** bovenaan. Kies een bestaande uitvoermap met **Map kiezen** of vul het absolute pad in. Stel het aantal parallelle pagina’s, standaardprofiel en GPU-voorkeur in en klik **Opslaan**. Het profiel geldt voor nieuwe uploads. Met een uitvoermap worden bestanden daar rechtstreeks opgeslagen met een unieke naam. Zonder uitvoermap blijft downloaden beschikbaar. Bij de webserver is de uitvoermap een map op de server. Instellingen worden per Windows-gebruiker bewaard onder LOCALAPPDATA/ComicGPU.
 
-Voor CBR gebruikt Windows de ingebouwde `C:\Windows\System32\tar.exe` (libarchive). Als jouw Windows-versie dit RAR-bestand niet ondersteunt, converteer het eerst naar CBZ. CBZ heeft geen externe archiefsoftware nodig.
+De vorige Rust-versie staat op branch `backup/rust-0.2.0`. De portable exe vereist Edge WebView2 en is niet digitaal ondertekend. De Windows-interface moet nog op een Windows-pc worden gecontroleerd.
 
-Zelf bouwen vereist de Rust MSVC-toolchain, Visual Studio C++ Build Tools en WebView2:
+## Bouwen
 
-```powershell
-cargo build --locked --release -p comicgpu-desktop -p comicgpu-server
-.\target\release\comicgpu-desktop.exe
-```
-
-De workflow levert uitvoerbare bestanden. Ze zijn niet digitaal ondertekend en er is nog geen installer gepubliceerd.
-
-### Eén portable exe
-
-De GNU-build kan worden verpakt met `bash tools/build-portable.sh` (Rust en MinGW vereist op de buildmachine). Dit maakt `dist/ComicGPU-Windows-0.2.0-x64.exe` met de applicatie en WebView2Loader.dll ingebed. Dubbelklik op dit bestand. De inhoud wordt in een unieke tijdelijke map uitgepakt, de app wordt gestart en na afsluiten wordt de tijdelijke map opgeruimd. Microsoft Edge WebView2 Runtime blijft vereist. De portable exe is niet digitaal ondertekend.
+Gebruik `bash tools/build-portable.sh` voor een GNU-crossbuild. De executable staat onder `dist/ComicGPU-Windows-0.2.1-x64.exe`. De ingebouwde UnRAR-component valt onder de voorwaarden in `licenses/UnRAR.txt`.
 
 ## Docker / Proxmox
 
@@ -32,7 +23,7 @@ docker compose logs comicgpu
 
 Gebruik de getoonde start-URL en vervang `0.0.0.0` door het IP-adres van je VM. Neem `?token=...` over. Het token wordt willekeurig gemaakt bij elke serverstart. Voor een vast token kun je `COMICGPU_TOKEN` als omgevingsvariabele instellen (minimaal 16 tekens). Bewaar dat token privé. Gebruik de server binnen je vertrouwde netwerk. Er zijn geen afzonderlijke gebruikersaccounts.
 
-De container bevat libarchive-tools voor CBR. GPU-toegang vanuit Docker/LXC vraagt passende hostdrivers en device-doorgifte. CPU werkt standaard. De hardwaremelding laat zien welke grafische backend beschikbaar is. Softwarematige adapters kunnen ook worden gemeld.
+CBR-ondersteuning is ingebouwd. GPU-toegang vanuit Docker/LXC vraagt passende hostdrivers en device-doorgifte. CPU werkt standaard. De hardwaremelding laat zien welke grafische backend beschikbaar is. Softwarematige adapters kunnen ook worden gemeld.
 
 Direct op Linux:
 
@@ -41,7 +32,7 @@ cargo build --locked --release -p comicgpu-server
 ./target/release/comicgpu-server
 ```
 
-De standaard server luistert op `127.0.0.1:8501`. Stel voor je LAN `COMICGPU_BIND=0.0.0.0:8501` in. Installeer `libarchive-tools` voor CBR.
+De standaard server luistert op `127.0.0.1:8501`. Stel voor je LAN `COMICGPU_BIND=0.0.0.0:8501` in. 
 
 ## Werkwijze
 

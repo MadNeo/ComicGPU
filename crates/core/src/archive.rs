@@ -5,7 +5,6 @@ use serde::Serialize;
 use std::{
     io::{Cursor, Read, Write},
     path::Path,
-    process::{Command, Stdio},
 };
 use xmltree::{Element, XMLNode};
 use zip::{write::SimpleFileOptions, ZipArchive, ZipWriter};
@@ -49,62 +48,44 @@ fn bounded_read(reader: impl Read, maximum: u64) -> Result<Vec<u8>> {
     );
     Ok(data)
 }
-// Stream selected RAR members to stdout. No archive paths are written to disk.
-fn rar_command(path: &Path, member: Option<&str>, maximum: u64) -> Result<Vec<u8>> {
-    let program = if cfg!(windows) {
-        let system = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
-        std::path::PathBuf::from(system)
-            .join("System32")
-            .join("tar.exe")
-    } else {
-        std::path::PathBuf::from("bsdtar")
-    };
-    let mut command = Command::new(program);
-    command
-        .arg(if member.is_some() { "-xOf" } else { "-tf" })
-        .arg(path);
-    if let Some(name) = member {
-        command.arg("--").arg(name);
-    }
-    let mut child = command
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .context(
-            "CBR vereist libarchive-tools op Linux of Windows tar.exe met RAR-ondersteuning",
-        )?;
-    let result = bounded_read(child.stdout.take().context("Uitvoer ontbreekt")?, maximum);
-    if result.is_err() {
-        let _ = child.kill();
-    }
-    let status = child.wait()?;
-    let bytes = result?;
-    ensure!(status.success(), "CBR-bestand kon niet worden uitgepakt");
-    Ok(bytes)
-}
-pub fn read_book(data: &[u8], filename: &str) -> Result<Book> {
+pub fn read_book(data: &[u8], _filename: &str) -> Result<Book> {
     ensure!(data.len() as u64 <= MAX_BYTES, "Archief groter dan 512 MB");
     let mut members = Vec::<(String, Vec<u8>)>::new();
-    if filename.to_ascii_lowercase().ends_with(".cbr") {
+    if data.starts_with(b"Rar!\x1a\x07") {
         let mut file = tempfile::NamedTempFile::new()?;
         file.write_all(data)?;
-        let listing = String::from_utf8(rar_command(file.path(), None, 1024 * 1024)?)?;
-        ensure!(
-            listing.lines().count() <= 3000,
-            "Meer dan 3000 archiefitems"
-        );
+        file.flush()?;
+        let path = file.into_temp_path();
+        let mut archive = unrar::Archive::new(&path)
+            .open_for_processing()
+            .context("CBR openen mislukt (beschadigd, versleuteld of onvolledig archief)")?;
+        let mut count = 0;
         let mut total = 0_u64;
-        for name in listing.lines() {
-            if image_name(name) || name.to_ascii_lowercase().ends_with("comicinfo.xml") {
+        while let Some(header) = archive.read_header().context("CBR-header lezen mislukt")? {
+            count += 1;
+            ensure!(count <= 3000, "Meer dan 3000 archiefitems");
+            let name = header.entry().filename.to_string_lossy().into_owned();
+            let size = header.entry().unpacked_size;
+            total = total
+                .checked_add(size)
+                .context("Ongeldige archiefgrootte")?;
+            ensure!(total <= MAX_BYTES, "Uitgepakte inhoud groter dan 512 MB");
+            archive = if header.entry().is_file()
+                && (image_name(&name) || name.to_ascii_lowercase().ends_with("comicinfo.xml"))
+            {
+                ensure!(size <= MAX_PAGE_BYTES, "Pagina groter dan 64 MB");
+                let (bytes, rest) = header
+                    .read()
+                    .with_context(|| format!("CBR-pagina uitpakken mislukt: {name}"))?;
                 ensure!(
-                    !name.contains(['*', '?', '[']),
-                    "CBR-bestandsnaam bevat niet-ondersteunde jokertekens"
+                    bytes.len() as u64 <= MAX_PAGE_BYTES,
+                    "Pagina groter dan 64 MB"
                 );
-                let bytes = rar_command(file.path(), Some(name), MAX_PAGE_BYTES)?;
-                total += bytes.len() as u64;
-                ensure!(total <= MAX_BYTES, "Uitgepakte inhoud groter dan 512 MB");
-                members.push((name.to_string(), bytes));
-            }
+                members.push((name, bytes));
+                rest
+            } else {
+                header.skip()?
+            };
         }
     } else {
         let mut archive = ZipArchive::new(Cursor::new(data))?;
