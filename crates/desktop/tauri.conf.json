@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ComicGPU",
+  "version": "0.2.0",
+  "identifier": "nl.comicgpu.desktop",
+  "build": { "frontendDist": "../../ui" },
+  "app": { "windows": [], "security": { "csp": "default-src 'self'; img-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'" } },
+  "bundle": { "active": true, "targets": ["nsis"], "icon": [] }
+}

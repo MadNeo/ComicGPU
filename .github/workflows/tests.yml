@@ -1,12 +1,33 @@
-name: Tests
-on: [push, pull_request]
+name: Rust checks and builds
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
 jobs:
-  test:
+  core-and-server:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          python-version: '3.12'
-      - run: pip install -r requirements.txt
-      - run: python -m unittest discover -s tests -v
+          components: rustfmt
+      - run: cargo fmt --all --check
+      - run: cargo test --locked -p comicgpu-core
+      - run: cargo build --locked --release -p comicgpu-server
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ComicGPU-Linux-server
+          path: target/release/comicgpu-server
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --locked -p comicgpu-core
+      - run: cargo build --locked --release -p comicgpu-server -p comicgpu-desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ComicGPU-Windows
+          path: |
+            target/release/comicgpu-desktop.exe
+            target/release/comicgpu-server.exe
+            README.md

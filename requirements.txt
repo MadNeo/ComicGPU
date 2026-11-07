@@ -1,4 +1,0 @@
-Pillow>=10.4,<13
-numpy>=1.26,<3
-streamlit>=1.40,<2
-rarfile>=4.2,<5

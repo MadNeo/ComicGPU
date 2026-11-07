@@ -1,0 +1,18 @@
+[package]
+name = "comicgpu-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "bmp", "tiff"] }
+imageproc = { version = "0.25", default-features = false }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+rayon = "1"
+xmltree = "0.11"
+natord = "1"
+tempfile = "3"
+wgpu = "0.19"
+pollster = "0.3"
+bytemuck = "1"
